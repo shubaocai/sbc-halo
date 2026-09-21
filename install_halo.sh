@@ -23,11 +23,11 @@
 # SOFTWARE.
 #
 # ---------------------------------------------------------------------------
-# install-halo.sh —— 一键部署 Halo 博客（社区版）
+# install_halo.sh —— 一键部署 Halo 博客（社区版）
 #
 #
 # 作者：鼠宝财（MIT License，详见同目录 LICENSE 文件）
-# 完整用法：bash install-halo.sh --help
+# 完整用法：bash install_halo.sh --help
 # ---------------------------------------------------------------------------
 #
 # 被 sh/dash 误调用时自动用 bash 重新执行（脚本用到了 pipefail/local 等 bash 特性）
@@ -69,11 +69,11 @@ trap 'err "脚本在第 $LINENO 行执行失败，已中止。"' ERR
 usage() {
   cat <<'EOF'
 
-install-halo.sh —— 一键部署 Halo 博客（社区版）
+install_halo.sh —— 一键部署 Halo 博客（社区版）
 MIT License · Copyright (c) 2026 鼠宝财
 
 用法：
-  bash install-halo.sh [选项]
+  bash install_halo.sh [选项]
 
 选项：
   --postgres, --pg      使用 PostgreSQL（默认）
@@ -97,10 +97,10 @@ MIT License · Copyright (c) 2026 鼠宝财
   HALO_EXTERNAL_URL DB_PASSWORD JVM_OPTS DOCKER_MIRROR
 
 示例：
-  bash install-halo.sh                                  # 默认安装
-  bash install-halo.sh --mysql --port 8080
-  bash install-halo.sh --url https://blog.example.com --open-firewall
-  HALO_PORT=9000 bash install-halo.sh --h2
+  bash install_halo.sh                                  # 默认安装
+  bash install_halo.sh --mysql --port 8080
+  bash install_halo.sh --url https://blog.example.com --open-firewall
+  HALO_PORT=9000 bash install_halo.sh --h2
 
 EOF
   exit 0
@@ -365,7 +365,7 @@ EOF
   case "$DB_TYPE" in
     h2)
       cat > "$compose" <<EOF
-# 本文件由 install-halo.sh 生成 · MIT License · Copyright (c) 2026 鼠宝财
+# 本文件由 install_halo.sh 生成 · MIT License · Copyright (c) 2026 鼠宝财
 $ver_line
 services:
   halo:
@@ -390,7 +390,7 @@ EOF
       ;;
     postgres)
       cat > "$compose" <<EOF
-# 本文件由 install-halo.sh 生成 · MIT License · Copyright (c) 2026 鼠宝财
+# 本文件由 install_halo.sh 生成 · MIT License · Copyright (c) 2026 鼠宝财
 $ver_line
 services:
   halo:
@@ -445,7 +445,7 @@ EOF
       ;;
     mysql)
       cat > "$compose" <<EOF
-# 本文件由 install-halo.sh 生成 · MIT License · Copyright (c) 2026 鼠宝财
+# 本文件由 install_halo.sh 生成 · MIT License · Copyright (c) 2026 鼠宝财
 $ver_line
 services:
   halo:
@@ -607,7 +607,7 @@ summary() {
   首次访问 /console 会进入初始化页面，按提示创建管理员账号即可。
   如果浏览器打不开，请检查：云厂商安全组 / 防火墙是否放行 $HALO_PORT 端口。
 ---------------------------------------------------------------------
-  install-halo.sh · MIT License · Copyright (c) 2026 鼠宝财
+  install_halo.sh · MIT License · Copyright (c) 2026 鼠宝财
 EOF
 }
 
