@@ -62,11 +62,17 @@ cd sbc-halo
 sudo bash install_halo.sh
 ```
 
-也可以直接一行跑：
+也可以不克隆仓库，把脚本下载到 `/tmp` 再执行（推荐这种写法：脚本先落盘，可以自己看一眼再跑，也避免 `curl | bash` 直接管道执行）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shubaocai/sbc-halo/main/install_halo.sh | sudo bash
+curl -fsSL -o /tmp/halo.sh https://raw.githubusercontent.com/shubaocai/sbc-halo/main/install_halo.sh && sudo bash /tmp/halo.sh
 ```
+
+> 如果 `raw.githubusercontent.com` 访问不稳定，可以换 jsDelivr 镜像（同一台腾讯云服务器实测两者均可达）：
+>
+> ```bash
+> curl -fsSL -o /tmp/halo.sh https://cdn.jsdelivr.net/gh/shubaocai/sbc-halo@main/install_halo.sh && sudo bash /tmp/halo.sh
+> ```
 
 跑完后浏览器访问：
 
