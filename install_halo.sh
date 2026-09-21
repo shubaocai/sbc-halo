@@ -21,26 +21,15 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-#
-# ---------------------------------------------------------------------------
-# install_halo.sh —— 一键部署 Halo 博客（社区版）
-#
-#
-# 作者：鼠宝财（MIT License，详见同目录 LICENSE 文件）
-# 完整用法：bash install_halo.sh --help
-# ---------------------------------------------------------------------------
-#
-# 被 sh/dash 误调用时自动用 bash 重新执行（脚本用到了 pipefail/local 等 bash 特性）
 if [ -z "${BASH_VERSION:-}" ]; then
   exec bash "$0" "$@"
 fi
 
 set -Eeuo pipefail
 
-# ---------------------------------------------------------------- 默认配置 ----
-HALO_VERSION="${HALO_VERSION:-2.26.1}"                             # 社区版版本号
-HALO_IMAGE_REPO="${HALO_IMAGE_REPO:-registry.fit2cloud.com/halo/halo}"  # 国内镜像源；也可用 halohub/halo
-DB_TYPE="${DB_TYPE:-postgres}"                                     # postgres | mysql | h2
+HALO_VERSION="${HALO_VERSION:-2.26.1}"
+HALO_IMAGE_REPO="${HALO_IMAGE_REPO:-registry.fit2cloud.com/halo/halo}"
+DB_TYPE="${DB_TYPE:-postgres}"
 HALO_PORT="${HALO_PORT:-8090}"
 HALO_DIR="${HALO_DIR:-/opt/halo}"
 HALO_EXTERNAL_URL="${HALO_EXTERNAL_URL:-}"
@@ -48,11 +37,10 @@ DB_NAME="${DB_NAME:-halo}"
 DB_USER="${DB_USER:-halo}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 JVM_OPTS="${JVM_OPTS:--Xmx512m -Xms256m}"
-DOCKER_MIRROR="${DOCKER_MIRROR:-}"        # 可选：Docker Hub 加速地址，如 https://docker.m.daocloud.io
+DOCKER_MIRROR="${DOCKER_MIRROR:-}"
 FORCE=0
 OPEN_FIREWALL=0
 
-# ------------------------------------------------------------------- 日志 ----
 if [ -t 1 ]; then
   C_RESET=$'\033[0m'; C_INFO=$'\033[36m'; C_OK=$'\033[32m'; C_WARN=$'\033[33m'; C_ERR=$'\033[31m'
 else
@@ -65,7 +53,6 @@ err()   { printf '%s[错误]%s %s\n' "$C_ERR"  "$C_RESET" "$*" >&2; }
 die()   { err "$*"; exit 1; }
 trap 'err "脚本在第 $LINENO 行执行失败，已中止。"' ERR
 
-# --------------------------------------------------------------- 参数解析 ----
 usage() {
   cat <<'EOF'
 
@@ -132,10 +119,8 @@ HALO_IMAGE="${HALO_IMAGE_REPO}:${HALO_VERSION}"
 case "$DB_TYPE" in postgres|mysql|h2) ;; *) die "DB_TYPE 只能是 postgres / mysql / h2，当前为：$DB_TYPE" ;; esac
 case "$HALO_PORT" in ''|*[!0-9]*) die "端口号必须是数字：$HALO_PORT" ;; esac
 
-# ------------------------------------------------------------- 前置环境检查 --
 [ "$(id -u)" -eq 0 ] || die "请用 root 运行（或 sudo bash $0）"
 [ -r /etc/os-release ] || die "无法读取 /etc/os-release，不支持的系统"
-# shellcheck disable=SC1091
 . /etc/os-release
 OS_ID="${ID:-unknown}"; OS_VER="${VERSION_ID:-}"
 ARCH="$(uname -m)"
@@ -148,21 +133,20 @@ if [ "$MEM_MB" -gt 0 ] && [ "$MEM_MB" -lt 900 ] && [ "$DB_TYPE" != "h2" ]; then
   warn "内存仅 ${MEM_MB}MB，跑 Halo + 独立数据库可能吃紧，建议加内存或改用 --h2（不推荐生产）。"
 fi
 
-# ------------------------------------------------------------ Docker 检测 ----
 docker_ready() { command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; }
 
 install_docker_official() {
   info "尝试使用 Docker 官方脚本安装（get.docker.com）……"
   local tmp; tmp="$(mktemp /tmp/get-docker.XXXXXX.sh)"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --connect-timeout 15 --max-time 120 https://get.docker.com -o "$tmp" || return 1
+    curl -fsSL --connect-timeout 15 --max-time 120 https://get.docker.com -o "$tmp" || { rm -f "$tmp"; return 1; }
   elif command -v wget >/dev/null 2>&1; then
-    wget -q -T 15 -O "$tmp" https://get.docker.com || return 1
+    wget -q -T 15 -O "$tmp" https://get.docker.com || { rm -f "$tmp"; return 1; }
   else
     warn "系统里没有 curl 也没有 wget，跳过官方脚本。"
     return 1
   fi
-  sh "$tmp" || return 1
+  sh "$tmp" || { rm -f "$tmp"; return 1; }
   rm -f "$tmp"
   command -v docker >/dev/null 2>&1
 }
@@ -174,7 +158,6 @@ install_docker_distro() {
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -y
       apt-get install -y docker.io ca-certificates curl
-      # 尽量补上 compose v2；没有就退到 docker-compose v1
       apt-get install -y docker-compose-v2 2>/dev/null || apt-get install -y docker-compose 2>/dev/null || true
       ;;
     centos|rhel|rocky|almalinux|fedora|opencloudos|tencentcos)
@@ -195,7 +178,6 @@ ensure_docker() {
     ok "Docker 安装完成：$(docker --version)"
   fi
 
-  # 守护进程没起来就拉起来
   if ! docker info >/dev/null 2>&1; then
     info "Docker 守护进程未运行，尝试启动……"
     if command -v systemctl >/dev/null 2>&1; then
@@ -210,19 +192,16 @@ ensure_docker() {
   ok "Docker 守护进程运行正常。"
 }
 
-# ------------------------------------------------ Docker Hub 镜像加速 ----
-# 国内服务器直连 Docker Hub 基本不通（registry-1.docker.io 超时），
-# 而 postgres / mysql 这类基础镜像只存在于 Docker Hub，所以必须先配好加速源。
 MIRROR_CANDIDATES="https://mirror.ccs.tencentyun.com https://docker.m.daocloud.io https://docker.1ms.run https://hub-mirror.c.163.com https://mirror.baidubce.com"
 
 mirror_ok() {
   local code
-  command -v curl >/dev/null 2>&1 || return 0    # 没有 curl 就不探测，直接信任
+  command -v curl >/dev/null 2>&1 || return 0
   code="$(curl -sS -m 6 -o /dev/null -w '%{http_code}' "$1/v2/" 2>/dev/null)"
   case "$code" in 200|401|403) return 0 ;; *) return 1 ;; esac
 }
 
-write_daemon_json() {   # $1 = 逗号分隔的镜像地址列表（已带引号）
+write_daemon_json() {
   local f=/etc/docker/daemon.json
   mkdir -p /etc/docker
   [ -f "$f" ] && cp -a "$f" "$f.bak.$(date +%s)"
@@ -274,7 +253,6 @@ ensure_registry_mirror() {
   ok "镜像加速已配置：$found"
 }
 
-# ------------------------------------------------------- Docker Compose ----
 COMPOSE=(); COMPOSE_V1=0
 ensure_compose() {
   if docker compose version >/dev/null 2>&1; then
@@ -296,7 +274,6 @@ ensure_compose() {
   die "缺少 Docker Compose，请安装 docker-compose-plugin 后重跑。"
 }
 
-# ------------------------------------------------------------ 生成配置 ----
 gen_password() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 16
@@ -347,7 +324,6 @@ write_files() {
 
   local ext_url; ext_url="$(detect_external_url)"
 
-  # .env 与 compose 分离，避免密码等特殊字符被 shell/YAML 反复转义
   cat > "$envf" <<EOF
 HALO_IMAGE=$HALO_IMAGE
 HALO_PORT=$HALO_PORT
@@ -501,7 +477,6 @@ services:
 networks:
   halo_network:
 EOF
-      # MySQL 的 root 密码单独生成
       if ! grep -q '^DB_ROOT_PASSWORD=' "$envf"; then
         printf 'DB_ROOT_PASSWORD=%s\n' "$(gen_password)" >> "$envf"
       fi
@@ -512,13 +487,12 @@ EOF
   info "外部访问地址：$ext_url"
 }
 
-# --------------------------------------------------------------- 部署 ----
 port_in_use() {
   command -v ss >/dev/null 2>&1 || return 1
   ss -lntH 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$HALO_PORT\$"
 }
 
-pull_image() {   # $1=镜像  $2=用途说明
+pull_image() {
   info "拉取$2：$1"
   if docker pull "$1"; then ok "已就绪：$1"; return 0; fi
   return 1
@@ -544,7 +518,6 @@ deploy() {
   fi
 
   if ! pull_image "$HALO_IMAGE" "Halo 镜像"; then
-    # 换另一个官方源重试；只有真正拉到才把地址写回 .env，避免留下拉不动的配置
     local alt_repo
     case "$HALO_IMAGE_REPO" in
       halohub/halo) alt_repo='registry.fit2cloud.com/halo/halo' ;;
@@ -611,7 +584,6 @@ summary() {
 EOF
 }
 
-# --------------------------------------------------------------- 主流程 ----
 main() {
   ensure_docker
   ensure_compose

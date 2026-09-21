@@ -247,6 +247,28 @@ sudo bash install_halo.sh --mirror https://docker.m.daocloud.io
 3. **服务是否健康**：`docker compose ps` 看 `halo` 是否为 `healthy`，`curl -I http://127.0.0.1:8090/console` 看本机是否正常。
 4. **面板类软件**：如果装了宝塔等面板，面板自身也有防火墙配置，要一并放行。
 
+### 容器退出了 / Halo 突然打不开（`Exited`）
+
+先看容器状态：
+
+```bash
+cd /opt/halo
+docker compose ps                     # STATUS 显示 Exited 就是容器已退出
+docker compose up -d                  # 原地拉起，数据不会丢
+docker compose logs --tail=50 halo    # 反复退出时看具体报错
+```
+
+比较常见的一种：数据库容器被停掉（手动 `docker stop`，或 Docker 守护进程重启过）之后，Halo 会因为解析不到 `halodb` 这个服务名而崩溃：
+
+```
+Cannot connect to halodb/<unresolved>:5432
+Caused by: java.net.UnknownHostException: halodb
+```
+
+compose 里配的是 `restart: on-failure:3`（沿用 Halo 官方示例的写法），也就是**只重试 3 次**，耗尽之后容器会永久退出、不会自己再起来，需要手动执行 `docker compose up -d` 恢复。数据都在 `/opt/halo` 目录下，不会丢。
+
+> 如果希望数据库恢复后 Halo 能自动接上，可以把 `docker-compose.yaml` 里两个服务的 `restart: on-failure:3` 改成 `unless-stopped`，再 `docker compose up -d` 生效。
+
 ### 提示"配置文件已存在，未做任何修改"
 
 脚本默认幂等，不会覆盖已有配置。要重新生成就加 `--force`，旧的 `docker-compose.yaml` 和 `.env` 会被备份为 `.bak.时间戳`。
